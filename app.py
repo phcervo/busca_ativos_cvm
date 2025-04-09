@@ -20,13 +20,14 @@ def main():
     pg = st.navigation([home,busca])
     pg.run()
 
-with open('nomes_emissores.json', 'r') as f:
-    dict_emissores = json.load(f)
+
 
 
 def busca_func():
     st.title("Consulta Fundos")
     #dm = DateManager()
+    with open('nomes_emissores.json', 'r') as f:
+        dict_emissores = json.load(f)
     d0 = datetime.today().date()
     mes4 = d0 - relativedelta(months=4)
     mes5 = d0 - relativedelta(months=5)
