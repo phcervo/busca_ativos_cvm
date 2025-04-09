@@ -59,11 +59,15 @@ def busca_func():
         
         if 'df_bancarios' not in st.session_state:
             st.session_state['df_bancarios'] = df_bancarios
+
+        if 'counter_replace' not in st.session_state:
+            st.session_state['counter_replace'] = 0
     # Lista emissores de Bancários
         df_bancarios = df_bancarios.copy()
         st.session_state['df_bancarios']['EMISSOR'] = st.session_state['df_bancarios']['EMISSOR'].str.upper()
-        if len (st.session_state['df_bancarios'])<1:
+        if st.session_state['counter_replace'] < 1:
             st.session_state['df_bancarios']['EMISSOR'] = st.session_state['df_bancarios']['EMISSOR'].replace(dict_emissores)
+            st.session_state['counter_replace'] += 1
         lista_emissores_bancarios = st.session_state['df_bancarios']['EMISSOR'].unique().tolist()
         lista_emissores_bancarios.sort()
         with st.form("form_bancarios"):
