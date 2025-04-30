@@ -51,6 +51,7 @@ def busca_func():
     #lista_fundos_form = [data.strftime("%m/%Y") for data in lista_fundos]
     sidebar = st.sidebar.selectbox("Tipo de ativo",['Debêntures','Bancários'])
     sidedate = st.sidebar.selectbox("Data Carteira",options=lista_fundos)
+    '''
     if sidedate == m4:
         sidedate = mes4
     elif sidedate == m5:
@@ -69,6 +70,7 @@ def busca_func():
         sidedate = mes11
     elif sidedate == m12:
         sidedate = mes12
+    ''''
     fi = lista_cvm(sidedate)
     
     if sidebar == 'Bancários':
