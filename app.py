@@ -13,14 +13,27 @@ def lista_cvm(m4):
     fi.fetch_historical_data(dataset="composicao_diversificacao",start_date=m4,end_date=m4)
     return fi
 
+@st.cache_data()
+def cadastros_cvm():
+    fi = cvmpy.FI()
+    fi.fetch_static_data(dataset="registro_fundo_classe")
+    df = fi.registro_fundo
+    df = df.copy()
+    df = df[['CNPJ_Fundo','Gestor']]
+    df['Gestor'] = df['Gestor'].fillna("")
+    df.columns = ['CNPJ_FUNDO_CLASSE','GESTOR']
+    df["CNPJ_FUNDO_CLASSE"] = df["CNPJ_FUNDO_CLASSE"].astype(str).str.zfill(14)
+    df["CNPJ_FUNDO_CLASSE"] = df["CNPJ_FUNDO_CLASSE"].apply(lambda x: f"{x[:2]}.{x[2:5]}.{x[5:8]}/{x[8:12]}-{x[12:14]}")
+    df = df.sort_values(by="GESTOR", ascending=False)
+    df = df.drop_duplicates(subset="CNPJ_FUNDO_CLASSE", keep="first")
+    return df
+
 def main():
     home = st.Page(about_func,title="Home")
     busca = st.Page(busca_func,title="Fundos que detém os ativos")
     st.set_page_config(layout='wide',page_title="Consulta CVM")
     pg = st.navigation([home,busca])
     pg.run()
-
-
 
 
 def busca_func():
@@ -49,16 +62,29 @@ def busca_func():
     m12 = mes12.strftime("%m/%Y")
     lista_fundos = [m4,m5,m6,m7,m8,m9,m10,m11,m12]
     #lista_fundos_form = [data.strftime("%m/%Y") for data in lista_fundos]
+    if 'data_counter' not in st.session_state:
+        st.session_state['data_counter'] = 0
+
+    if 'datepre' not in st.session_state:
+        st.session_state['datepre'] = None
+
     sidebar = st.sidebar.selectbox("Tipo de ativo",['Debêntures','Bancários'])
     sidedate = st.sidebar.selectbox("Data Carteira",options=lista_fundos)
     fi = lista_cvm(sidedate)
+    cad_cvm = cadastros_cvm()
     
     if sidebar == 'Bancários':
         df_bancarios = fi.composicao_diversificacao.cda_fi_BLC_5[['CNPJ_FUNDO_CLASSE','DENOM_SOCIAL', 'DT_COMPTC','TP_APLIC', 'TP_ATIVO','CNPJ_EMISSOR', 'EMISSOR','TITULO_POSFX',
        'CD_INDEXADOR_POSFX','VL_MERC_POS_FINAL']]
+        df_bancarios = df_bancarios.merge(cad_cvm,on='CNPJ_FUNDO_CLASSE',how='left')
         
         if 'df_bancarios' not in st.session_state:
             st.session_state['df_bancarios'] = df_bancarios
+        
+        if sidedate != st.session_state['datepre']:
+            st.session_state['df_bancarios'] = df_bancarios
+            st.session_state['datepre'] = sidedate
+            st.session_state['df_bancarios']['EMISSOR'] = st.session_state['df_bancarios']['EMISSOR'].replace(dict_emissores)
 
         if 'counter_replace' not in st.session_state:
             st.session_state['counter_replace'] = 0
@@ -73,7 +99,8 @@ def busca_func():
         with st.form("form_bancarios"):
             emissores = st.multiselect("Selecione os emissores que deseja ver",lista_emissores_bancarios,placeholder="Selecione os emissores")
             df = st.session_state['df_bancarios'].loc[st.session_state['df_bancarios']['EMISSOR'].isin(emissores)]
-            df.columns = ['CNPJ_FUNDO','NOME_FUNDO','DATA_CARTEIRA','TIPO_ATIVO','CLASSIFICAÇÃO_ATIVO','CNPJ_EMISSOR','EMISSOR','TITULO_POS_FIXADO',
+            df = df[['CNPJ_FUNDO_CLASSE','DENOM_SOCIAL', 'DT_COMPTC','GESTOR','TP_APLIC', 'TP_ATIVO','CNPJ_EMISSOR', 'EMISSOR','TITULO_POSFX','CD_INDEXADOR_POSFX','VL_MERC_POS_FINAL']]
+            df.columns = ['CNPJ_FUNDO','NOME_FUNDO','DATA_CARTEIRA','GESTOR','TIPO_ATIVO','CLASSIFICAÇÃO_ATIVO','CNPJ_EMISSOR','EMISSOR','TITULO_POS_FIXADO',
                           'INDEXADOR','VALOR_DE_MERCADO']                                 
             df['DATA_CARTEIRA'] = pd.to_datetime(df['DATA_CARTEIRA']).dt.strftime("%m/%Y")
             
@@ -93,8 +120,15 @@ def busca_func():
         df_rv = fi.composicao_diversificacao.cda_fi_BLC_4[['CNPJ_FUNDO_CLASSE','DENOM_SOCIAL','DT_COMPTC','TP_APLIC', 'TP_ATIVO', 'EMISSOR_LIGADO', 'QT_POS_FINAL','CD_ATIVO','VL_MERC_POS_FINAL',
                                                     'DT_INI_VIGENCIA','DT_FIM_VIGENCIA']]
         df_debentures = df_rv.loc[df_rv['TP_APLIC'] == 'Debêntures']
+        df_debentures = df_debentures.merge(cad_cvm,on='CNPJ_FUNDO_CLASSE',how='left')
+        df_debentures['GESTOR'] = df_debentures['GESTOR'].fillna("") 
         if 'df_debentures' not in st.session_state:
             st.session_state['df_debentures'] = df_debentures
+        
+        if sidedate != st.session_state['datepre']:
+            st.session_state['df_debentures'] = df_debentures
+            st.session_state['datepre'] = sidedate
+
         lista_ativos = st.session_state['df_debentures']['CD_ATIVO'].unique().tolist()
         lista_ativos.sort()
         with st.form("debform"):
@@ -102,7 +136,9 @@ def busca_func():
             button1 = st.form_submit_button("Exibir")
         if button1:
             df = st.session_state['df_debentures'].loc[st.session_state['df_debentures']['CD_ATIVO'].isin(ativos)]
-            df.columns = ['CNPJ_FUNDO','NOME_FUNDO','DATA_CARTEIRA','TIPO_ATIVO', 'CLASSE_ATIVO', 'EMISSOR_LIGADO', 'QUANTIDADE','ATIVO','VALOR_DE_MERCADO',
+            df = df[['CNPJ_FUNDO_CLASSE','DENOM_SOCIAL','DT_COMPTC','GESTOR','TP_APLIC', 'TP_ATIVO', 'EMISSOR_LIGADO', 'QT_POS_FINAL','CD_ATIVO','VL_MERC_POS_FINAL',
+                                                    'DT_INI_VIGENCIA','DT_FIM_VIGENCIA']]
+            df.columns = ['CNPJ_FUNDO','NOME_FUNDO','DATA_CARTEIRA','GESTOR','TIPO_ATIVO', 'CLASSE_ATIVO', 'EMISSOR_LIGADO', 'QUANTIDADE','ATIVO','VALOR_DE_MERCADO',
                                                     'DATA_EMISSAO','DATA_VENCIMENTO']
             df['DATA_CARTEIRA'] = pd.to_datetime(df['DATA_CARTEIRA']).dt.strftime("%m/%Y")
             df['DATA_EMISSAO'] = pd.to_datetime(df['DATA_EMISSAO']).dt.date
