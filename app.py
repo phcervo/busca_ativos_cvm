@@ -5,6 +5,7 @@ from datetime import date, datetime, timedelta
 import pandas as pd
 from io import BytesIO
 import json
+import time
 
 # Funcs
 @st.cache_data()
@@ -28,11 +29,31 @@ def cadastros_cvm():
     df = df.drop_duplicates(subset="CNPJ_FUNDO_CLASSE", keep="first")
     return df
 
+@st.cache_data()
+def cadastros_cvm2():
+    fi = cvmpy.FI()
+    fi.fetch_static_data(dataset="cadastro")
+    df = fi.cadastro
+    return df
+
+@st.cache_data()
+def informes_cvm(m4,m1):
+    # Carrega informe diario do mês
+    fundos = cvmpy.FI()
+    fundos.fetch_historical_data(dataset="informe_diario", start_date=m4, end_date=m1)
+    return fundos
+@st.cache_data()
+
+def get_cdi(d1_form,d2_form):
+    df = pd.read_csv(f'https://api.bcb.gov.br/dados/serie/bcdata.sgs.11/dados?formato=csv&dataInicial={d1_form}&dataFinal={d2_form}',encoding='UTF-8',sep=';')
+    return df
+
 def main():
     home = st.Page(about_func,title="Home")
     busca = st.Page(busca_func,title="Fundos que detém os ativos")
+    rentabilidade = st.Page(rentabilidade_func,title="Rentabilidade fundos")
     st.set_page_config(layout='wide',page_title="Consulta CVM")
-    pg = st.navigation([home,busca])
+    pg = st.navigation([home,busca,rentabilidade])
     pg.run()
 
 
@@ -68,7 +89,7 @@ def busca_func():
     if 'datepre' not in st.session_state:
         st.session_state['datepre'] = None
 
-    sidebar = st.sidebar.selectbox("Tipo de ativo",['Debêntures','Bancários'])
+    sidebar = st.sidebar.selectbox("Tipo de ativo",['Debêntures','Bancários','FIDC'])
     sidedate = st.sidebar.selectbox("Data Carteira",options=lista_fundos)
     fi = lista_cvm(sidedate)
     cad_cvm = cadastros_cvm()
@@ -152,6 +173,41 @@ def busca_func():
                 writer.close()
             excel_data = output.getvalue()
             st.download_button("Baixar base de fundos",data=excel_data,file_name='base_fundos_debentures.xlsx')
+    
+    elif sidebar == 'FIDC':
+        df_fundos = fi.composicao_diversificacao.cda_fi_BLC_2[['CNPJ_FUNDO_CLASSE','DENOM_SOCIAL','DT_COMPTC','TP_APLIC', 'TP_ATIVO', 'QT_POS_FINAL','VL_MERC_POS_FINAL',
+                                                    'CNPJ_FUNDO_CLASSE_COTA','NM_FUNDO_CLASSE_SUBCLASSE_COTA']]
+        df_fidc = df_fundos.loc[df_fundos['TP_ATIVO'] == 'FIDC']
+        df_fidc = df_fidc.merge(cad_cvm,on='CNPJ_FUNDO_CLASSE',how='left')
+        df_fidc['GESTOR'] = df_fidc['GESTOR'].fillna("")
+        if 'df_fidc' not in st.session_state:
+            st.session_state['df_fidc'] = df_fidc
+        
+        if sidedate != st.session_state['datepre']:
+            st.session_state['df_fidc'] = df_fidc
+            st.session_state['datepre'] = sidedate
+
+        lista_ativos = st.session_state['df_fidc']['NM_FUNDO_CLASSE_SUBCLASSE_COTA'].unique().tolist()
+        lista_ativos.sort()
+        with st.form("fidcform"):
+            ativos = st.multiselect("Selecione os ativos",lista_ativos,placeholder="Selecione...")
+            button1 = st.form_submit_button("Exibir")
+        if button1:
+            df = st.session_state['df_fidc'].loc[st.session_state['df_fidc']['NM_FUNDO_CLASSE_SUBCLASSE_COTA'].isin(ativos)]
+            df = df[['CNPJ_FUNDO_CLASSE','DENOM_SOCIAL','DT_COMPTC','GESTOR','TP_APLIC', 'TP_ATIVO', 'QT_POS_FINAL','VL_MERC_POS_FINAL',
+                                                    'CNPJ_FUNDO_CLASSE_COTA','NM_FUNDO_CLASSE_SUBCLASSE_COTA']]
+            df.columns = ['CNPJ_FUNDO','NOME_FUNDO','DATA_CARTEIRA','GESTOR','TIPO_ATIVO', 'CLASSE_ATIVO', 'QUANTIDADE','VALOR_DE_MERCADO',
+                                                    'CNPJ_FIDC','NOME_FIDC']
+            df['DATA_CARTEIRA'] = pd.to_datetime(df['DATA_CARTEIRA']).dt.strftime("%m/%Y")
+            df_exibe = df.copy()
+            df_exibe["VALOR_DE_MERCADO"] = df_exibe["VALOR_DE_MERCADO"].map("R$ {:,.2f}".format)
+            st.dataframe(df_exibe,hide_index=True,use_container_width=True)
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+                df.to_excel(writer, index=False, sheet_name="Sheet1")
+                writer.close()
+            excel_data = output.getvalue()
+            st.download_button("Baixar base de fundos",data=excel_data,file_name='base_fundos_fidc.xlsx')
             
 
 def about_func():
@@ -159,8 +215,159 @@ def about_func():
     st.sidebar.subheader("QUANTITAS | Compliance")
     st.text("-> Nesse site é possível verificar os fundos detentores dos ativos selecionados, de acordo com o Mês/Ano da carteira escolhida.")
     st.text("-> Consultas para títulos bancários: CDB,LFs e DPGE. De acordo com o emissor escolhido")
-    st.text("-> Possível consultar os fundos que detem as debêntures selecionadas")
+    st.text("-> Possível consultar os fundos que detem as debêntures (ativo)")
+    st.text("-> Consultas para FIDC (por nome do fundo)")
     st.text('-> Ao clicar em "Baixar base de fundos", um Excel com as posições é baixado.')
+    st.text('-> Consultar rentabilidade média de fundos de Crédito Privado.')
+    st.text(r'-> Metodologia: Fundos com pelo menos 30% do PL em debêntures na última carteira aberta, mais de 10 cotistas, com Taxa de Adm maior que 0. Após isso, filtra-se os 20 fundos de maior PL.')
+
+
+def rentabilidade_func():
+    st.title("Rentabilidade Fundos Crédito Privado")
+    st.sidebar.subheader("QUANTITAS | Compliance")
+    d0 = datetime.today().date()
+    mes4 = d0 - relativedelta(months=4)
+    mes1 = d0 - relativedelta(months=1)
+    mes2 = d0 - relativedelta(months=2)
+    mes3 = d0 - relativedelta(months=3)
+    m4 = mes4.strftime("%Y-%m-%d")
+    m1 = mes1.strftime("%Y-%m-%d")
+    m2 = mes2.strftime("%Y-%m-%d")
+    m3 = mes3.strftime("%Y-%m-%d")
+    format_m1 = mes1.strftime("%m/%Y")
+    format_m2 = mes2.strftime("%m/%Y")
+    format_m3 = mes3.strftime("%m/%Y")
+    mes_rentabilidade = st.selectbox('Selecione a data',[format_m1,format_m2,format_m3])
+    fi = lista_cvm(m4)
+    df_cadastro = cadastros_cvm2()
+    fundos = informes_cvm(m4,m1)
+    
+    df_cadastro = df_cadastro[['CNPJ_FUNDO','DENOM_SOCIAL','TAXA_ADM']]
+    df_cadastro = df_cadastro.dropna()
+    # Composição da carteira (ultima carteira aberta)
+    df_bancarios = fi.composicao_diversificacao.cda_fi_BLC_5[['CNPJ_FUNDO_CLASSE','DENOM_SOCIAL', 'DT_COMPTC','TP_APLIC', 'TP_ATIVO','CNPJ_EMISSOR', 'EMISSOR','TITULO_POSFX',
+        'CD_INDEXADOR_POSFX','VL_MERC_POS_FINAL']]
+
+    df_rv = fi.composicao_diversificacao.cda_fi_BLC_4[['CNPJ_FUNDO_CLASSE','DENOM_SOCIAL','DT_COMPTC','TP_APLIC', 'TP_ATIVO', 'EMISSOR_LIGADO', 'QT_POS_FINAL','CD_ATIVO','VL_MERC_POS_FINAL',
+                                                    'DT_INI_VIGENCIA','DT_FIM_VIGENCIA']]
+    df_debentures = df_rv.loc[df_rv['TP_APLIC'] == 'Debêntures']
+    # Juntar os fundos que tem um ou outro df, logo esses serão fundos que possuem aplicação em crédito privado.
+    df_debentures_cod = df_debentures[['CNPJ_FUNDO_CLASSE','DENOM_SOCIAL']]
+    df_bancarios = df_bancarios[['CNPJ_FUNDO_CLASSE','DENOM_SOCIAL']]
+    df_cp = pd.concat([df_debentures_cod,df_bancarios],ignore_index=True)
+    df_cp = df_cp.drop_duplicates('CNPJ_FUNDO_CLASSE')
+
+    # Pegar os CNPJS desses fundos, para depois linkar com as cotas e cadastro. Filtrando TX_ADM, PL,...
+    lista_cnpjs_fundos = df_cp['CNPJ_FUNDO_CLASSE'].unique().tolist()
+    df_taxas = df_cadastro[df_cadastro['CNPJ_FUNDO'].isin(lista_cnpjs_fundos)]
+    dftx2 = df_taxas[df_taxas['TAXA_ADM']>0]
+    cnpj_com_taxa = dftx2['CNPJ_FUNDO'].unique().tolist()
+    # Filtra apenas os fundos que contem as caracteristicas desejadas (informe diario)
+    df_fundos = fundos.informe_diario.inf_diario_fi[['CNPJ_FUNDO_CLASSE', 'DT_COMPTC', 'VL_QUOTA', 'VL_PATRIM_LIQ', 'NR_COTST']][fundos.informe_diario.inf_diario_fi.CNPJ_FUNDO_CLASSE.isin(cnpj_com_taxa)]
+    df_fundos = df_fundos.rename(columns={'CNPJ_FUNDO_CLASSE':'cnpj', 'DT_COMPTC':'data', 'VL_QUOTA':'cota', 'VL_PATRIM_LIQ':'pl', 'NR_COTST':'cotistas' })
+    df_fundos['pl'] = df_fundos['pl'].astype(float)
+    df_fundos['cota'] = df_fundos['cota'].astype(float)
+    df_fundos = df_fundos.sort_values('data', ascending=True)
+    # Pega os fundos e PL da ultima carteira aberta
+    data_maxima = df_debentures['DT_COMPTC'].max()
+    df_d2 = df_fundos.loc[df_fundos['data'] == data_maxima]
+    pl_dos_fundos = df_d2[['cnpj','pl']]
+    pl_dos_fundos.columns = ['CNPJ_FUNDO_CLASSE','PL']
+    # Minimo 30% do PL em debentures
+    df_debentures = df_debentures.groupby(['CNPJ_FUNDO_CLASSE','DENOM_SOCIAL'])['VL_MERC_POS_FINAL'].sum().reset_index()
+    df_debentures = df_debentures.merge(pl_dos_fundos,how='left')
+    df_debentures = df_debentures.dropna()
+    df_debentures = df_debentures.copy()
+    df_debentures['deb/pl'] = df_debentures['VL_MERC_POS_FINAL'] / df_debentures['PL']
+    df_debentures = df_debentures.loc[df_debentures['deb/pl'] > 0.3]
+
+    lista_cnpj_credito = df_debentures['CNPJ_FUNDO_CLASSE'].unique().tolist()
+    df_final = fundos.informe_diario.inf_diario_fi[['CNPJ_FUNDO_CLASSE', 'DT_COMPTC', 'VL_QUOTA', 'VL_PATRIM_LIQ', 'NR_COTST']][fundos.informe_diario.inf_diario_fi.CNPJ_FUNDO_CLASSE.isin(lista_cnpj_credito)]
+    df_final = df_final.rename(columns={'CNPJ_FUNDO_CLASSE':'cnpj', 'DT_COMPTC':'data', 'VL_QUOTA':'cota', 'VL_PATRIM_LIQ':'pl', 'NR_COTST':'cotistas' })
+
+    df_final['pl'] = df_final['pl'].astype(float)
+    df_final['cota'] = df_final['cota'].astype(float)
+    df_final = df_final.sort_values('data', ascending=True)
+    df_final = df_final.loc[df_final['data'] == data_maxima]
+    df_final = df_final.loc[df_final['cotistas'] > 10]
+    df_ordenada = df_final.sort_values("pl",ascending=False)
+    df_20_maiores = df_ordenada.head(20)
+    lista_20 = df_20_maiores['cnpj'].unique().tolist()
+    df_filtrada = fundos.informe_diario.inf_diario_fi[['CNPJ_FUNDO_CLASSE', 'DT_COMPTC', 'VL_QUOTA', 'VL_PATRIM_LIQ', 'NR_COTST']][fundos.informe_diario.inf_diario_fi.CNPJ_FUNDO_CLASSE.isin(lista_20)]
+    df_filtrada = df_filtrada.rename(columns={'CNPJ_FUNDO_CLASSE':'cnpj', 'DT_COMPTC':'data', 'VL_QUOTA':'cota', 'VL_PATRIM_LIQ':'pl', 'NR_COTST':'cotistas' })
+
+    df_filtrada['pl'] = df_filtrada['pl'].astype(float)
+    df_filtrada['cota'] = df_filtrada['cota'].astype(float)
+    df_filtrada = df_filtrada.sort_values('data', ascending=True) 
+    # Calculo rentabilidade
+    df_filtrada['mes'] = df_filtrada['data'].dt.month
+    if mes_rentabilidade == format_m1:
+        mes_calculo = mes1
+    elif mes_rentabilidade == format_m2:
+        mes_calculo = mes2
+    else:
+        mes_calculo = mes3
+
+    m1_calculo = mes_calculo.month
+    m2_data = mes_calculo - relativedelta(months=1)
+    m1_calculo = mes_calculo.month
+    m2_calculo = m2_data.month
+    data_final = df_filtrada.loc[df_filtrada['mes'] == m1_calculo]['data'].max()
+    data_inicial = df_filtrada.loc[df_filtrada['mes'] == m2_calculo]['data'].max()
+    dict_rentabilidade = {}
+    lista_cnpj = []
+    lista_rentabilidade = []
+    for cnpj in lista_20:
+        df1 = df_filtrada.loc[(df_filtrada['cnpj'] == cnpj)]
+        df2 = df1.loc[df1['data'] == data_final]
+        cota_last = df2['cota'].values[0]
+        df3 = df1.loc[df1['data'] == data_inicial]
+        cota_first = df3['cota'].values[0]
+        lista_cnpj.append(cnpj)
+        lista_rentabilidade.append((cota_last/cota_first - 1 )*100)
+    dict_rentabilidade['cnpj'] = lista_cnpj
+    dict_rentabilidade['rentabilidade'] = lista_rentabilidade
+    df_agrupada = pd.DataFrame(dict_rentabilidade)
+    df_cadastro.columns = ['cnpj','nome','taxa_adm']
+    df_agrupada = df_agrupada.merge(df_cadastro,on='cnpj',how='left').drop_duplicates()
+    d1_form = data_inicial.strftime('%d/%m/%Y')
+    d2_form = data_final.strftime('%d/%m/%Y')
+    ### PEGA CDI ###
+    df = get_cdi(d1_form,d2_form)
+    df['valor'] = df['valor'].str.replace(",",".")
+    ### CALCULA CDI ###
+    df['valor'] = (df['valor'].apply(float) /100 )+ 1
+    df = df.iloc[1:]
+    di_acumulado = df['valor'].prod()
+    di_acumulado = (di_acumulado - 1) * 100
+    # CALCULA RENTABILIDADE SOBRE CDI
+    rentabilidade_media = df_agrupada['rentabilidade'].mean()
+    cdi_acumulado = di_acumulado
+    rentabilidade_cdi = rentabilidade_media / cdi_acumulado * 100
+    # TRANSFORMA EM EXCEL A TABELA
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        df.to_excel(writer, index=False, sheet_name="Sheet1")
+        writer.close()
+    excel_data = output.getvalue()
+    # COLOCA NA TELA A RENTABILIDADE
+    m1_calculo = mes_calculo.month
+    ano_calculo = mes_calculo.year
+    data = f"Rentabilidade {m1_calculo}/{ano_calculo}"
+    st.subheader(data)
+
+    with st.expander("Fundos considerados"):
+        st.dataframe(df_agrupada,hide_index=True)
+        st.download_button("Baixar Tabela",excel_data,file_name='rentabilidade_fundos.xlsx')
+    st.markdown("#### Rentabilidade média dos fundos:")
+    rent_formatada = round(rentabilidade_media,2)
+    st.text(f"{rent_formatada} %")
+    st.markdown("#### Rentabilidade CDI:")
+    cdi_formatado = round(cdi_acumulado,2)
+    st.text(f"{cdi_formatado} %")
+    st.markdown("#### Rentabilidade sobre o CDI:")
+    total_formatado = round(rentabilidade_cdi,2)
+    st.success(f"{total_formatado} %")
 
 if __name__ == '__main__':
     main()
