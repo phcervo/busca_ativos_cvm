@@ -63,6 +63,9 @@ def busca_func():
     with open('nomes_emissores.json', 'r') as f:
         dict_emissores = json.load(f)
     d0 = datetime.today().date()
+    mes1 = d0 - relativedelta(months=1)
+    mes2 = d0 - relativedelta(months=2)
+    mes3 = d0 - relativedelta(months=3)
     mes4 = d0 - relativedelta(months=4)
     mes5 = d0 - relativedelta(months=5)
     mes6 = d0 - relativedelta(months=6)
@@ -72,6 +75,9 @@ def busca_func():
     mes10 = d0 - relativedelta(months=10)
     mes11 = d0 - relativedelta(months=11)
     mes12 = d0 - relativedelta(months=12)
+    m1 = mes1.strftime("%m/%Y")
+    m2 = mes2.strftime("%m/%Y")
+    m3 = mes3.strftime("%m/%Y")
     m4 = mes4.strftime("%m/%Y")
     m5 = mes5.strftime("%m/%Y")
     m6 = mes6.strftime("%m/%Y")
@@ -81,7 +87,7 @@ def busca_func():
     m10 = mes10.strftime("%m/%Y")
     m11 = mes11.strftime("%m/%Y")
     m12 = mes12.strftime("%m/%Y")
-    lista_fundos = [m4,m5,m6,m7,m8,m9,m10,m11,m12]
+    lista_fundos = [m1,m2,m3,m4,m5,m6,m7,m8,m9,m10,m11,m12]
     #lista_fundos_form = [data.strftime("%m/%Y") for data in lista_fundos]
     if 'data_counter' not in st.session_state:
         st.session_state['data_counter'] = 0
@@ -241,6 +247,8 @@ def rentabilidade_func():
     fi = lista_cvm(m4)
     df_cadastro = cadastros_cvm2()
     fundos = informes_cvm(m4,m1)
+
+    lista_negativa_cnpj = ['12.845.801/0001-37']
     
     df_cadastro = df_cadastro[['CNPJ_FUNDO','DENOM_SOCIAL','TAXA_ADM']]
     df_cadastro = df_cadastro.dropna()
@@ -253,14 +261,11 @@ def rentabilidade_func():
     df_debentures = df_rv.loc[df_rv['TP_APLIC'] == 'Debêntures']
     # Juntar os fundos que tem um ou outro df, logo esses serão fundos que possuem aplicação em crédito privado.
     df_debentures_cod = df_debentures[['CNPJ_FUNDO_CLASSE','DENOM_SOCIAL']]
-    df_bancarios = df_bancarios[['CNPJ_FUNDO_CLASSE','DENOM_SOCIAL']]
-    df_cp = pd.concat([df_debentures_cod,df_bancarios],ignore_index=True)
-    df_cp = df_cp.drop_duplicates('CNPJ_FUNDO_CLASSE')
 
     # Pegar os CNPJS desses fundos, para depois linkar com as cotas e cadastro. Filtrando TX_ADM, PL,...
-    lista_cnpjs_fundos = df_cp['CNPJ_FUNDO_CLASSE'].unique().tolist()
+    lista_cnpjs_fundos = df_debentures_cod['CNPJ_FUNDO_CLASSE'].unique().tolist()
     df_taxas = df_cadastro[df_cadastro['CNPJ_FUNDO'].isin(lista_cnpjs_fundos)]
-    dftx2 = df_taxas[df_taxas['TAXA_ADM']>0]
+    dftx2 = df_taxas[df_taxas['TAXA_ADM']>0.1]
     cnpj_com_taxa = dftx2['CNPJ_FUNDO'].unique().tolist()
     # Filtra apenas os fundos que contem as caracteristicas desejadas (informe diario)
     df_fundos = fundos.informe_diario.inf_diario_fi[['CNPJ_FUNDO_CLASSE', 'DT_COMPTC', 'VL_QUOTA', 'VL_PATRIM_LIQ', 'NR_COTST']][fundos.informe_diario.inf_diario_fi.CNPJ_FUNDO_CLASSE.isin(cnpj_com_taxa)]
@@ -273,13 +278,16 @@ def rentabilidade_func():
     df_d2 = df_fundos.loc[df_fundos['data'] == data_maxima]
     pl_dos_fundos = df_d2[['cnpj','pl']]
     pl_dos_fundos.columns = ['CNPJ_FUNDO_CLASSE','PL']
-    # Minimo 30% do PL em debentures
+    # Minimo 40% do PL em debentures
     df_debentures = df_debentures.groupby(['CNPJ_FUNDO_CLASSE','DENOM_SOCIAL'])['VL_MERC_POS_FINAL'].sum().reset_index()
     df_debentures = df_debentures.merge(pl_dos_fundos,how='left')
     df_debentures = df_debentures.dropna()
     df_debentures = df_debentures.copy()
     df_debentures['deb/pl'] = df_debentures['VL_MERC_POS_FINAL'] / df_debentures['PL']
-    df_debentures = df_debentures.loc[df_debentures['deb/pl'] > 0.3]
+    df_debentures = df_debentures.loc[df_debentures['deb/pl'] > 0.4]
+    df_debentures = df_debentures.loc[~df_debentures['DENOM_SOCIAL'].str.contains("INCENTIVADO")]
+    df_debentures = df_debentures.loc[~df_debentures['DENOM_SOCIAL'].str.contains("INFRA")]
+    df_debentures = df_debentures.loc[~df_debentures['CNPJ_FUNDO_CLASSE'].isin(lista_negativa_cnpj)]
 
     lista_cnpj_credito = df_debentures['CNPJ_FUNDO_CLASSE'].unique().tolist()
     df_final = fundos.informe_diario.inf_diario_fi[['CNPJ_FUNDO_CLASSE', 'DT_COMPTC', 'VL_QUOTA', 'VL_PATRIM_LIQ', 'NR_COTST']][fundos.informe_diario.inf_diario_fi.CNPJ_FUNDO_CLASSE.isin(lista_cnpj_credito)]
@@ -317,19 +325,8 @@ def rentabilidade_func():
     dict_rentabilidade = {}
     lista_cnpj = []
     lista_rentabilidade = []
-    for cnpj in lista_20:
-        df1 = df_filtrada.loc[(df_filtrada['cnpj'] == cnpj)]
-        df2 = df1.loc[df1['data'] == data_final]
-        cota_last = df2['cota'].values[0]
-        df3 = df1.loc[df1['data'] == data_inicial]
-        cota_first = df3['cota'].values[0]
-        lista_cnpj.append(cnpj)
-        lista_rentabilidade.append((cota_last/cota_first - 1 )*100)
-    dict_rentabilidade['cnpj'] = lista_cnpj
-    dict_rentabilidade['rentabilidade'] = lista_rentabilidade
-    df_agrupada = pd.DataFrame(dict_rentabilidade)
-    df_cadastro.columns = ['cnpj','nome','taxa_adm']
-    df_agrupada = df_agrupada.merge(df_cadastro,on='cnpj',how='left').drop_duplicates()
+    lista_pl = []
+
     d1_form = data_inicial.strftime('%d/%m/%Y')
     d2_form = data_final.strftime('%d/%m/%Y')
     ### PEGA CDI ###
@@ -340,34 +337,87 @@ def rentabilidade_func():
     df = df.iloc[1:]
     di_acumulado = df['valor'].prod()
     di_acumulado = (di_acumulado - 1) * 100
-    # CALCULA RENTABILIDADE SOBRE CDI
-    rentabilidade_media = df_agrupada['rentabilidade'].mean()
-    cdi_acumulado = di_acumulado
-    rentabilidade_cdi = rentabilidade_media / cdi_acumulado * 100
-    # TRANSFORMA EM EXCEL A TABELA
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-        df.to_excel(writer, index=False, sheet_name="Sheet1")
-        writer.close()
-    excel_data = output.getvalue()
+    df['valor'] = df['valor']- 1
+    df['data'] = pd.to_datetime(df['data'],format= "%d/%m/%Y")
+
+    # RENTABILIDADE POR MÊS
+    for cnpj in lista_20:
+        df1 = df_filtrada.loc[(df_filtrada['cnpj'] == cnpj)]
+        df2 = df1.loc[df1['data'] == data_final]
+        cota_last = df2['cota'].values[0]
+        df3 = df1.loc[df1['data'] == data_inicial]
+        pl = df1['pl'].values[0]
+        cota_first = df3['cota'].values[0]
+        lista_cnpj.append(cnpj)
+        lista_pl.append(pl)
+        lista_rentabilidade.append((cota_last/cota_first - 1 )*100)
+    dict_rentabilidade['cnpj'] = lista_cnpj
+    dict_rentabilidade['rentabilidade'] = lista_rentabilidade
+    dict_rentabilidade['pl'] = lista_pl
+    df_agrupada_mes = pd.DataFrame(dict_rentabilidade)
+    df_cadastro.columns = ['cnpj','nome','taxa_adm']
+    df_agrupada_mes = df_agrupada_mes.merge(df_cadastro,on='cnpj',how='left').drop_duplicates()
+    # DF RENTABILIDADE POR DIA
+    df_filtrada = df_filtrada.sort_values(['cnpj', 'data'])
+    df_filtrada['retorno'] = df_filtrada.groupby('cnpj')['cota'].pct_change()
+    df_diaria = df_filtrada.copy()
+    df_diaria = df_diaria.merge(df_cadastro,on='cnpj',how='left')
+    df_diaria = df_diaria.loc[df_diaria['mes'] == m1_calculo]
+    df_diaria = df_diaria.merge(df,on='data',how='left')
+    df_diaria['retorno/cdi'] = df_diaria['retorno'] / df_diaria['valor']
+    df_diaria = df_diaria[['data','retorno','retorno/cdi','cnpj','nome','pl']]
+    media_diaria = df_diaria.groupby('data')['retorno'].mean().reset_index()
+    media_cdi_diaria = df_diaria.groupby('data')['retorno/cdi'].mean().reset_index()
+    media_diaria = media_diaria.merge(media_cdi_diaria,how='left')
     # COLOCA NA TELA A RENTABILIDADE
     m1_calculo = mes_calculo.month
     ano_calculo = mes_calculo.year
     data = f"Rentabilidade {m1_calculo}/{ano_calculo}"
     st.subheader(data)
-
+    with st.expander("Rentabilidade diária"):
+        st.markdown("#### Rentabilidade diária:")
+        # TRANSFORMA EM EXCEL A TABELA DIÁRIA
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            media_diaria.to_excel(writer, index=False, sheet_name="diaria")
+        excel_diaria = output.getvalue()
+        st.dataframe(media_diaria,hide_index= True)
+        st.download_button("Baixar rentabilidade diária",data=excel_diaria,file_name='rent_diaria.xlsx')
+        st.markdown("#### Abertura rentabilidade por fundo:")
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            df_diaria.to_excel(writer, index=False, sheet_name="diaria")
+            writer.close()
+        excel_aberto_diaria = output.getvalue()
+        st.dataframe(df_diaria,hide_index= True)
+        st.download_button("Baixar abertura diária",data=excel_aberto_diaria,file_name='rent_aberta_diaria.xlsx')
+   
+    
+    # CALCULA RENTABILIDADE SOBRE CDI
+    rentabilidade_media = df_agrupada_mes['rentabilidade'].mean()
+    cdi_acumulado = di_acumulado
+    rentabilidade_cdi = rentabilidade_media / cdi_acumulado * 100
+    # TRANSFORMA EM EXCEL A TABELA
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        df_agrupada_mes.to_excel(writer, index=False, sheet_name="Sheet1")
+        writer.close()
+    excel_data = output.getvalue()
+    
     with st.expander("Fundos considerados"):
-        st.dataframe(df_agrupada,hide_index=True)
+        st.dataframe(df_agrupada_mes,hide_index=True)
         st.download_button("Baixar Tabela",excel_data,file_name='rentabilidade_fundos.xlsx')
-    st.markdown("#### Rentabilidade média dos fundos:")
-    rent_formatada = round(rentabilidade_media,2)
-    st.text(f"{rent_formatada} %")
-    st.markdown("#### Rentabilidade CDI:")
-    cdi_formatado = round(cdi_acumulado,2)
-    st.text(f"{cdi_formatado} %")
-    st.markdown("#### Rentabilidade sobre o CDI:")
-    total_formatado = round(rentabilidade_cdi,2)
-    st.success(f"{total_formatado} %")
+    
+    with st.expander("Informações mensais"):
+        st.markdown("#### Rentabilidade média dos fundos:")
+        rent_formatada = round(rentabilidade_media,2)
+        st.text(f"{rent_formatada} %")
+        st.markdown("#### Rentabilidade CDI:")
+        cdi_formatado = round(cdi_acumulado,2)
+        st.text(f"{cdi_formatado} %")
+        st.markdown("#### Rentabilidade sobre o CDI:")
+        total_formatado = round(rentabilidade_cdi,2)
+        st.success(f"{total_formatado} %")
 
 if __name__ == '__main__':
     main()
