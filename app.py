@@ -233,20 +233,23 @@ def rentabilidade_func():
     st.sidebar.subheader("QUANTITAS | Compliance")
     d0 = datetime.today().date()
     mes4 = d0 - relativedelta(months=4)
+    mes0 = d0
     mes1 = d0 - relativedelta(months=1)
     mes2 = d0 - relativedelta(months=2)
     mes3 = d0 - relativedelta(months=3)
     m4 = mes4.strftime("%Y-%m-%d")
+    m0 = mes0.strftime("%Y-%m-%d")
     m1 = mes1.strftime("%Y-%m-%d")
     m2 = mes2.strftime("%Y-%m-%d")
     m3 = mes3.strftime("%Y-%m-%d")
     format_m1 = mes1.strftime("%m/%Y")
     format_m2 = mes2.strftime("%m/%Y")
     format_m3 = mes3.strftime("%m/%Y")
-    mes_rentabilidade = st.selectbox('Selecione a data',[format_m1,format_m2,format_m3])
+    format_m0 = mes0.strftime("%m/%Y")
+    mes_rentabilidade = st.selectbox('Selecione a data',[format_m0,format_m1,format_m2,format_m3])
     fi = lista_cvm(m4)
     df_cadastro = cadastros_cvm2()
-    fundos = informes_cvm(m4,m1)
+    fundos = informes_cvm(m4,m0)
 
     lista_negativa_cnpj = ['12.845.801/0001-37']
     
@@ -313,6 +316,8 @@ def rentabilidade_func():
         mes_calculo = mes1
     elif mes_rentabilidade == format_m2:
         mes_calculo = mes2
+    elif mes_rentabilidade == format_m0:
+        mes_calculo = mes0
     else:
         mes_calculo = mes3
 
