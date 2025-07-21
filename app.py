@@ -37,6 +37,21 @@ def cadastros_cvm2():
     return df
 
 @st.cache_data()
+def cadastros_cvm3():
+    fi = cvmpy.FI()
+    fi.fetch_static_data(dataset="registro_fundo_classe")
+    df = fi.registro_fundo
+    df = df.copy()
+    df = df[['CNPJ_Fundo','Denominacao_Social']]
+    df['Denominacao_Social'] = df['Denominacao_Social'].fillna("")
+    df.columns = ['CNPJ_FUNDO_CLASSE','NOME_FUNDO']
+    df["CNPJ_FUNDO_CLASSE"] = df["CNPJ_FUNDO_CLASSE"].astype(str).str.zfill(14)
+    df["CNPJ_FUNDO_CLASSE"] = df["CNPJ_FUNDO_CLASSE"].apply(lambda x: f"{x[:2]}.{x[2:5]}.{x[5:8]}/{x[8:12]}-{x[12:14]}")
+    df = df.sort_values(by="NOME_FUNDO", ascending=False)
+    df = df.drop_duplicates(subset="CNPJ_FUNDO_CLASSE", keep="first")
+    return df
+
+@st.cache_data()
 def informes_cvm(m4,m1):
     # Carrega informe diario do mês
     fundos = cvmpy.FI()
@@ -233,11 +248,13 @@ def rentabilidade_func():
     st.sidebar.subheader("QUANTITAS | Compliance")
     d0 = datetime.today().date()
     mes4 = d0 - relativedelta(months=4)
+    mes5 = d0 - relativedelta(months=5)
     mes0 = d0
     mes1 = d0 - relativedelta(months=1)
     mes2 = d0 - relativedelta(months=2)
     mes3 = d0 - relativedelta(months=3)
     m4 = mes4.strftime("%Y-%m-%d")
+    m5 = mes5.strftime("%Y-%m-%d")
     m0 = mes0.strftime("%Y-%m-%d")
     m1 = mes1.strftime("%Y-%m-%d")
     m2 = mes2.strftime("%Y-%m-%d")
@@ -248,13 +265,13 @@ def rentabilidade_func():
     format_m0 = mes0.strftime("%m/%Y")
     mes_rentabilidade = st.selectbox('Selecione a data',[format_m0,format_m1,format_m2,format_m3])
     fi = lista_cvm(m4)
-    df_cadastro = cadastros_cvm2()
+    df_cadastro = cadastros_cvm3()
     fundos = informes_cvm(m4,m0)
 
-    lista_negativa_cnpj = ['12.845.801/0001-37']
-    
-    df_cadastro = df_cadastro[['CNPJ_FUNDO','DENOM_SOCIAL','TAXA_ADM']]
-    df_cadastro = df_cadastro.dropna()
+    lista_negativa_cnpj = ['12.845.801/0001-37','29.283.779/0001-81']
+    print(df_cadastro.columns)
+    df_cadastro = df_cadastro[['CNPJ_FUNDO_CLASSE','NOME_FUNDO']]
+    #df_cadastro = df_cadastro.dropna()
     # Composição da carteira (ultima carteira aberta)
     df_bancarios = fi.composicao_diversificacao.cda_fi_BLC_5[['CNPJ_FUNDO_CLASSE','DENOM_SOCIAL', 'DT_COMPTC','TP_APLIC', 'TP_ATIVO','CNPJ_EMISSOR', 'EMISSOR','TITULO_POSFX',
         'CD_INDEXADOR_POSFX','VL_MERC_POS_FINAL']]
@@ -264,12 +281,12 @@ def rentabilidade_func():
     df_debentures = df_rv.loc[df_rv['TP_APLIC'] == 'Debêntures']
     # Juntar os fundos que tem um ou outro df, logo esses serão fundos que possuem aplicação em crédito privado.
     df_debentures_cod = df_debentures[['CNPJ_FUNDO_CLASSE','DENOM_SOCIAL']]
-
     # Pegar os CNPJS desses fundos, para depois linkar com as cotas e cadastro. Filtrando TX_ADM, PL,...
     lista_cnpjs_fundos = df_debentures_cod['CNPJ_FUNDO_CLASSE'].unique().tolist()
-    df_taxas = df_cadastro[df_cadastro['CNPJ_FUNDO'].isin(lista_cnpjs_fundos)]
-    dftx2 = df_taxas[df_taxas['TAXA_ADM']>0.1]
-    cnpj_com_taxa = dftx2['CNPJ_FUNDO'].unique().tolist()
+    df_taxas = df_cadastro[df_cadastro['CNPJ_FUNDO_CLASSE'].isin(lista_cnpjs_fundos)]
+    #print(df_taxas.loc[df_taxas['DENOM_SOCIAL'].str.contains('QUANTITAS')])
+    dftx2 = df_taxas
+    cnpj_com_taxa = dftx2['CNPJ_FUNDO_CLASSE'].unique().tolist()
     # Filtra apenas os fundos que contem as caracteristicas desejadas (informe diario)
     df_fundos = fundos.informe_diario.inf_diario_fi[['CNPJ_FUNDO_CLASSE', 'DT_COMPTC', 'VL_QUOTA', 'VL_PATRIM_LIQ', 'NR_COTST']][fundos.informe_diario.inf_diario_fi.CNPJ_FUNDO_CLASSE.isin(cnpj_com_taxa)]
     df_fundos = df_fundos.rename(columns={'CNPJ_FUNDO_CLASSE':'cnpj', 'DT_COMPTC':'data', 'VL_QUOTA':'cota', 'VL_PATRIM_LIQ':'pl', 'NR_COTST':'cotistas' })
@@ -287,6 +304,7 @@ def rentabilidade_func():
     df_debentures = df_debentures.dropna()
     df_debentures = df_debentures.copy()
     df_debentures['deb/pl'] = df_debentures['VL_MERC_POS_FINAL'] / df_debentures['PL']
+    
     df_debentures = df_debentures.loc[df_debentures['deb/pl'] > 0.4]
     df_debentures = df_debentures.loc[~df_debentures['DENOM_SOCIAL'].str.contains("INCENTIVADO")]
     df_debentures = df_debentures.loc[~df_debentures['DENOM_SOCIAL'].str.contains("INFRA")]
@@ -331,7 +349,7 @@ def rentabilidade_func():
     lista_cnpj = []
     lista_rentabilidade = []
     lista_pl = []
-
+    
     d1_form = data_inicial.strftime('%d/%m/%Y')
     d2_form = data_final.strftime('%d/%m/%Y')
     ### PEGA CDI ###
@@ -360,7 +378,7 @@ def rentabilidade_func():
     dict_rentabilidade['rentabilidade'] = lista_rentabilidade
     dict_rentabilidade['pl'] = lista_pl
     df_agrupada_mes = pd.DataFrame(dict_rentabilidade)
-    df_cadastro.columns = ['cnpj','nome','taxa_adm']
+    df_cadastro.columns = ['cnpj','nome']
     df_agrupada_mes = df_agrupada_mes.merge(df_cadastro,on='cnpj',how='left').drop_duplicates()
     # DF RENTABILIDADE POR DIA
     df_filtrada = df_filtrada.sort_values(['cnpj', 'data'])
