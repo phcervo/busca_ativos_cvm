@@ -268,8 +268,7 @@ def rentabilidade_func():
     df_cadastro = cadastros_cvm3()
     fundos = informes_cvm(m4,m0)
 
-    lista_negativa_cnpj = ['12.845.801/0001-37','29.283.779/0001-81']
-    print(df_cadastro.columns)
+    lista_negativa_cnpj = ['12.845.801/0001-37','29.283.779/0001-81','46.975.474/0001-50']
     df_cadastro = df_cadastro[['CNPJ_FUNDO_CLASSE','NOME_FUNDO']]
     #df_cadastro = df_cadastro.dropna()
     # Composição da carteira (ultima carteira aberta)
@@ -364,16 +363,23 @@ def rentabilidade_func():
     df['data'] = pd.to_datetime(df['data'],format= "%d/%m/%Y")
 
     # RENTABILIDADE POR MÊS
+    print(lista_20)
     for cnpj in lista_20:
         df1 = df_filtrada.loc[(df_filtrada['cnpj'] == cnpj)]
         df2 = df1.loc[df1['data'] == data_final]
-        cota_last = df2['cota'].values[0]
+        if len(df2) <1:
+            pass
+        else:
+            cota_last = df2['cota'].values[0]
         df3 = df1.loc[df1['data'] == data_inicial]
         pl = df1['pl'].values[0]
-        cota_first = df3['cota'].values[0]
-        lista_cnpj.append(cnpj)
-        lista_pl.append(pl)
-        lista_rentabilidade.append((cota_last/cota_first - 1 )*100)
+        if len(df3) <1:
+            pass
+        else:
+            cota_first = df3['cota'].values[0]
+            lista_cnpj.append(cnpj)
+            lista_pl.append(pl)
+            lista_rentabilidade.append((cota_last/cota_first - 1 )*100)
     dict_rentabilidade['cnpj'] = lista_cnpj
     dict_rentabilidade['rentabilidade'] = lista_rentabilidade
     dict_rentabilidade['pl'] = lista_pl
