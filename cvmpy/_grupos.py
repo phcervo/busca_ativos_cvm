@@ -92,6 +92,7 @@ class FI(Grupo):
     _ENDPOINTS = {
         "cadastro": "FI/CAD/DADOS/cad_fi.csv",
         "extrato": "FI/DOC/EXTRATO/DADOS/extrato_fi.csv",
+        "extrato_novo":"FI/CAD/DADOS/cad_fi_hist.zip",
         "informe_diario": "FI/DOC/INF_DIARIO/DADOS/",
         "composicao_diversificacao": "FI/DOC/CDA/DADOS/",
         "balancete": "FI/DOC/BALANCETE/DADOS/",

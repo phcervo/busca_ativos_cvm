@@ -17,14 +17,13 @@ def lista_cvm(m4):
 @st.cache_data()
 def cadastros_cvm():
     fi = cvmpy.FI()
-    fi.fetch_static_data(dataset="registro_fundo_classe")
-    df = fi.registro_fundo
-    df = df.copy()
-    df = df[['CNPJ_Fundo','Gestor']]
-    df['Gestor'] = df['Gestor'].fillna("")
+    fi.fetch_static_data(dataset='extrato_novo')
+    df_gestor = fi.cad_fi_hist_gestor
+    df_gestor['DT_FIM_GESTOR'] = df_gestor['DT_FIM_GESTOR'].fillna(0)
+    df_gestor = df_gestor.loc[df_gestor['DT_FIM_GESTOR'] == 0]
+    df = df_gestor[['CNPJ_FUNDO','GESTOR']]
+    df['GESTOR'] = df['GESTOR'].fillna("")
     df.columns = ['CNPJ_FUNDO_CLASSE','GESTOR']
-    df["CNPJ_FUNDO_CLASSE"] = df["CNPJ_FUNDO_CLASSE"].astype(str).str.zfill(14)
-    df["CNPJ_FUNDO_CLASSE"] = df["CNPJ_FUNDO_CLASSE"].apply(lambda x: f"{x[:2]}.{x[2:5]}.{x[5:8]}/{x[8:12]}-{x[12:14]}")
     df = df.sort_values(by="GESTOR", ascending=False)
     df = df.drop_duplicates(subset="CNPJ_FUNDO_CLASSE", keep="first")
     return df
@@ -39,17 +38,16 @@ def cadastros_cvm2():
 @st.cache_data()
 def cadastros_cvm3():
     fi = cvmpy.FI()
-    fi.fetch_static_data(dataset="registro_fundo_classe")
-    df = fi.registro_fundo
-    df = df.copy()
-    df = df[['CNPJ_Fundo','Denominacao_Social']]
-    df['Denominacao_Social'] = df['Denominacao_Social'].fillna("")
-    df.columns = ['CNPJ_FUNDO_CLASSE','NOME_FUNDO']
-    df["CNPJ_FUNDO_CLASSE"] = df["CNPJ_FUNDO_CLASSE"].astype(str).str.zfill(14)
-    df["CNPJ_FUNDO_CLASSE"] = df["CNPJ_FUNDO_CLASSE"].apply(lambda x: f"{x[:2]}.{x[2:5]}.{x[5:8]}/{x[8:12]}-{x[12:14]}")
-    df = df.sort_values(by="NOME_FUNDO", ascending=False)
-    df = df.drop_duplicates(subset="CNPJ_FUNDO_CLASSE", keep="first")
-    return df
+    fi.fetch_static_data(dataset='extrato_novo')
+    df_nome = fi.cad_fi_hist_denom_social
+    df_nome['DT_FIM_DENOM_SOCIAL'] = df_nome['DT_FIM_DENOM_SOCIAL'].fillna(0)
+    df_nome = df_nome.loc[df_nome['DT_FIM_DENOM_SOCIAL'] == 0]
+    df_nome = df_nome[['CNPJ_FUNDO','DENOM_SOCIAL']]
+    df_nome['DENOM_SOCIAL'] = df_nome['DENOM_SOCIAL'].fillna("")
+    df_nome.columns = ['CNPJ_FUNDO_CLASSE','NOME_FUNDO']
+    df_nome = df_nome.sort_values(by="NOME_FUNDO", ascending=False)
+    df_nome = df_nome.drop_duplicates(subset="CNPJ_FUNDO_CLASSE", keep="first")
+    return df_nome
 
 @st.cache_data()
 def informes_cvm(m4,m1):
@@ -57,8 +55,8 @@ def informes_cvm(m4,m1):
     fundos = cvmpy.FI()
     fundos.fetch_historical_data(dataset="informe_diario", start_date=m4, end_date=m1)
     return fundos
-@st.cache_data()
 
+@st.cache_data()
 def get_cdi(d1_form,d2_form):
     df = pd.read_csv(f'https://api.bcb.gov.br/dados/serie/bcdata.sgs.11/dados?formato=csv&dataInicial={d1_form}&dataFinal={d2_form}',encoding='UTF-8',sep=';')
     return df
@@ -292,9 +290,15 @@ def rentabilidade_func():
     df_fundos['pl'] = df_fundos['pl'].astype(float)
     df_fundos['cota'] = df_fundos['cota'].astype(float)
     df_fundos = df_fundos.sort_values('data', ascending=True)
+    df_fundos['data'] = pd.to_datetime(df_fundos['data'])
+
     # Pega os fundos e PL da ultima carteira aberta
     data_maxima = df_debentures['DT_COMPTC'].max()
-    df_d2 = df_fundos.loc[df_fundos['data'] == data_maxima]
+    df_d2 = df_fundos.loc[df_fundos['data'] == pd.to_datetime(data_maxima)]
+    if len(df_d2) <=1:
+        data_maxima = data_maxima - relativedelta(days=1)
+        df_d2 = df_fundos.loc[df_fundos['data'] == data_maxima]
+
     pl_dos_fundos = df_d2[['cnpj','pl']]
     pl_dos_fundos.columns = ['CNPJ_FUNDO_CLASSE','PL']
     # Minimo 40% do PL em debentures
@@ -318,6 +322,7 @@ def rentabilidade_func():
     df_final = df_final.sort_values('data', ascending=True)
     df_final = df_final.loc[df_final['data'] == data_maxima]
     df_final = df_final.loc[df_final['cotistas'] > 10]
+ 
     df_ordenada = df_final.sort_values("pl",ascending=False)
     df_20_maiores = df_ordenada.head(20)
     lista_20 = df_20_maiores['cnpj'].unique().tolist()
@@ -326,7 +331,8 @@ def rentabilidade_func():
 
     df_filtrada['pl'] = df_filtrada['pl'].astype(float)
     df_filtrada['cota'] = df_filtrada['cota'].astype(float)
-    df_filtrada = df_filtrada.sort_values('data', ascending=True) 
+    df_filtrada = df_filtrada.sort_values('data', ascending=True)
+   
     # Calculo rentabilidade
     df_filtrada['mes'] = df_filtrada['data'].dt.month
     if mes_rentabilidade == format_m1:
@@ -349,6 +355,7 @@ def rentabilidade_func():
     lista_rentabilidade = []
     lista_pl = []
     
+
     d1_form = data_inicial.strftime('%d/%m/%Y')
     d2_form = data_final.strftime('%d/%m/%Y')
     ### PEGA CDI ###
@@ -363,14 +370,13 @@ def rentabilidade_func():
     df['data'] = pd.to_datetime(df['data'],format= "%d/%m/%Y")
 
     # RENTABILIDADE POR MÊS
-    print(lista_20)
     for cnpj in lista_20:
         df1 = df_filtrada.loc[(df_filtrada['cnpj'] == cnpj)]
         df2 = df1.loc[df1['data'] == data_final]
         if len(df2) <1:
-            pass
-        else:
-            cota_last = df2['cota'].values[0]
+            df2 = df1.loc[df1['data'] == data_final - relativedelta(days=1)]
+
+        cota_last = df2['cota'].values[0]
         df3 = df1.loc[df1['data'] == data_inicial]
         pl = df1['pl'].values[0]
         if len(df3) <1:
