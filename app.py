@@ -315,7 +315,7 @@ def rentabilidade_func():
     df_debentures = df_debentures.loc[~df_debentures['CNPJ_FUNDO_CLASSE'].isin(lista_negativa_cnpj)]
 
     lista_cnpj_credito = df_debentures['CNPJ_FUNDO_CLASSE'].unique().tolist()
-    df_final = fundos.informe_diario.inf_diario_fi[['CNPJ_FUNDO_CLASSE', 'DT_COMPTC', 'VL_QUOTA', 'VL_PATRIM_LIQ', 'NR_COTST']][fundos.informe_diario.inf_diario_fi.CNPJ_FUNDO_CLASSE.isin(lista_cnpj_credito)]
+    df_final = fundos.informe_diario.inf_diario_fi[['CNPJ_FUNDO_CLASSE','DT_COMPTC', 'VL_QUOTA', 'VL_PATRIM_LIQ', 'NR_COTST']][fundos.informe_diario.inf_diario_fi.CNPJ_FUNDO_CLASSE.isin(lista_cnpj_credito)]
     df_final = df_final.rename(columns={'CNPJ_FUNDO_CLASSE':'cnpj', 'DT_COMPTC':'data', 'VL_QUOTA':'cota', 'VL_PATRIM_LIQ':'pl', 'NR_COTST':'cotistas' })
 
     df_final['pl'] = df_final['pl'].astype(float)
@@ -327,8 +327,18 @@ def rentabilidade_func():
     df_ordenada = df_final.sort_values("pl",ascending=False)
     df_20_maiores = df_ordenada.head(20)
     lista_20 = df_20_maiores['cnpj'].unique().tolist()
-    df_filtrada = fundos.informe_diario.inf_diario_fi[['CNPJ_FUNDO_CLASSE', 'DT_COMPTC', 'VL_QUOTA', 'VL_PATRIM_LIQ', 'NR_COTST']][fundos.informe_diario.inf_diario_fi.CNPJ_FUNDO_CLASSE.isin(lista_20)]
+    df_filtrada = fundos.informe_diario.inf_diario_fi[['CNPJ_FUNDO_CLASSE','ID_SUBCLASSE', 'DT_COMPTC', 'VL_QUOTA', 'VL_PATRIM_LIQ', 'NR_COTST']][fundos.informe_diario.inf_diario_fi.CNPJ_FUNDO_CLASSE.isin(lista_20)]
     df_filtrada = df_filtrada.rename(columns={'CNPJ_FUNDO_CLASSE':'cnpj', 'DT_COMPTC':'data', 'VL_QUOTA':'cota', 'VL_PATRIM_LIQ':'pl', 'NR_COTST':'cotistas' })
+
+    repetidos = df_filtrada[df_filtrada.duplicated(subset=["data"], keep=False)]
+    cnpjs_repetidos = repetidos['cnpj'].unique().tolist()
+    for valor in cnpjs_repetidos:
+        df = df_filtrada.loc[df_filtrada['cnpj'] == valor]
+        max_dt = df['data'].max()
+        df_last = df.loc[df['data'] == max_dt]
+        maior = df_last['pl'].max()
+        subclasse = df_last.loc[df_last['pl'] == maior]['ID_SUBCLASSE'].iloc[0]
+        df_filtrada = df_filtrada.loc[df_filtrada['ID_SUBCLASSE'] != subclasse]
 
     df_filtrada['pl'] = df_filtrada['pl'].astype(float)
     df_filtrada['cota'] = df_filtrada['cota'].astype(float)
@@ -484,8 +494,6 @@ def rentabilidade_inc():
     df_cadastro = df_cadastro[['CNPJ_FUNDO_CLASSE','NOME_FUNDO']]
     #df_cadastro = df_cadastro.dropna()
     # Composição da carteira (ultima carteira aberta)
-    df_bancarios = fi.composicao_diversificacao.cda_fi_BLC_5[['CNPJ_FUNDO_CLASSE','DENOM_SOCIAL', 'DT_COMPTC','TP_APLIC', 'TP_ATIVO','CNPJ_EMISSOR', 'EMISSOR','TITULO_POSFX',
-        'CD_INDEXADOR_POSFX','VL_MERC_POS_FINAL']]
 
     df_rv = fi.composicao_diversificacao.cda_fi_BLC_4[['CNPJ_FUNDO_CLASSE','DENOM_SOCIAL','DT_COMPTC','TP_APLIC', 'TP_ATIVO', 'EMISSOR_LIGADO', 'QT_POS_FINAL','CD_ATIVO','VL_MERC_POS_FINAL',
                                                     'DT_INI_VIGENCIA','DT_FIM_VIGENCIA']]
