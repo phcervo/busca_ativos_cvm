@@ -386,7 +386,10 @@ def rentabilidade_func():
         df2 = df1.loc[df1['data'] == data_final]
         if len(df2) <1:
             df2 = df1.loc[df1['data'] == data_final - relativedelta(days=1)]
-
+        if len(df2) <1:
+            data_max = df1['data'].max()
+            df2 = df1.loc[df1['data'] == data_max]
+  
         cota_last = df2['cota'].values[0]
         df3 = df1.loc[df1['data'] == data_inicial]
         pl = df1['pl'].values[0]
