@@ -715,7 +715,7 @@ def rentabilidade_inc_sem_filtro():
     df_cadastro = df_cadastro[['CNPJ_FUNDO_CLASSE','NOME_FUNDO']]
     #df_cadastro = df_cadastro.dropna()
     # Composição da carteira (ultima carteira aberta)
-
+    
     df_rv = fi.composicao_diversificacao.cda_fi_BLC_4[['CNPJ_FUNDO_CLASSE','DENOM_SOCIAL','DT_COMPTC','TP_APLIC', 'TP_ATIVO', 'EMISSOR_LIGADO', 'QT_POS_FINAL','CD_ATIVO','VL_MERC_POS_FINAL',
                                                     'DT_INI_VIGENCIA','DT_FIM_VIGENCIA']]
     df_debentures = df_rv.loc[df_rv['TP_APLIC'] == 'Debêntures']
@@ -751,9 +751,9 @@ def rentabilidade_inc_sem_filtro():
     df_debentures = df_debentures.copy()
     df_debentures['deb/pl'] = df_debentures['VL_MERC_POS_FINAL'] / df_debentures['PL']
     
-    df_debentures = df_debentures.loc[df_debentures['deb/pl'] > 0.4]
-    df_incentivado = df_debentures.loc[df_debentures['DENOM_SOCIAL'].str.contains("INCENTIVADO")]
-    df_infra = df_debentures.loc[df_debentures['DENOM_SOCIAL'].str.contains("INFRA")]
+    #df_debentures = df_debentures.loc[df_debentures['deb/pl'] > 0.4]
+    df_incentivado = df_cadastro.loc[df_cadastro['NOME_FUNDO'].str.contains("INCENTIVAD")]
+    df_infra = df_cadastro.loc[df_cadastro['NOME_FUNDO'].str.contains("INFRA")]
     df_debentures = pd.concat([df_incentivado,df_infra])
     df_debentures =  df_debentures.drop_duplicates(subset="CNPJ_FUNDO_CLASSE", keep="first")
 
@@ -767,7 +767,7 @@ def rentabilidade_inc_sem_filtro():
     df_final['cota'] = df_final['cota'].astype(float)
     df_final = df_final.sort_values('data', ascending=True)
     df_final = df_final.loc[df_final['data'] == data_maxima]
-    df_final = df_final.loc[df_final['cotistas'] > 10]
+    df_final = df_final.loc[df_final['cotistas'] >= 10]
  
     df_ordenada = df_final.sort_values("pl",ascending=False)
     lista_fundos_inc = df_ordenada['cnpj'].unique().tolist()
