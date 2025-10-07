@@ -696,20 +696,33 @@ def rentabilidade_inc_sem_filtro():
     mes1 = d0 - relativedelta(months=1)
     mes2 = d0 - relativedelta(months=2)
     mes3 = d0 - relativedelta(months=3)
+    mes6 = d0 - relativedelta(months=6)
+    mes7 = d0 - relativedelta(months=7)
+    mes8 = d0 - relativedelta(months=8)
+    mes9 = d0 - relativedelta(months=9)
+    mes10 = d0 - relativedelta(months=10)
     m4 = mes4.strftime("%Y-%m-%d")
     m5 = mes5.strftime("%Y-%m-%d")
     m0 = mes0.strftime("%Y-%m-%d")
     m1 = mes1.strftime("%Y-%m-%d")
     m2 = mes2.strftime("%Y-%m-%d")
     m3 = mes3.strftime("%Y-%m-%d")
+    m10 = mes10.strftime("%Y-%m-%d")
     format_m1 = mes1.strftime("%m/%Y")
     format_m2 = mes2.strftime("%m/%Y")
     format_m3 = mes3.strftime("%m/%Y")
     format_m0 = mes0.strftime("%m/%Y")
-    mes_rentabilidade = st.selectbox('Selecione a data',[format_m0,format_m1,format_m2,format_m3])
+    format_m4 = mes4.strftime("%m/%Y")
+    format_m5 = mes5.strftime("%m/%Y")
+    format_m6 = mes6.strftime("%m/%Y")
+    format_m7 = mes7.strftime("%m/%Y")
+    format_m8 = mes8.strftime("%m/%Y")
+    format_m9 = mes9.strftime("%m/%Y")
+    format_m10 = mes10.strftime("%m/%Y")
+    mes_rentabilidade = st.selectbox('Selecione a data',[format_m0,format_m1,format_m2,format_m3,format_m4,format_m5,format_m6,format_m7,format_m8,format_m9,format_m10])
     fi = lista_cvm(m4)
     df_cadastro = cadastros_cvm3()
-    fundos = informes_cvm(m4,m0)
+    fundos = informes_cvm(m10,m0)
 
     lista_negativa_cnpj = ['12.845.801/0001-37','29.283.779/0001-81','46.975.474/0001-50']
     df_cadastro = df_cadastro[['CNPJ_FUNDO_CLASSE','NOME_FUNDO']]
@@ -786,8 +799,22 @@ def rentabilidade_inc_sem_filtro():
         mes_calculo = mes2
     elif mes_rentabilidade == format_m0:
         mes_calculo = mes0
-    else:
+    elif mes_rentabilidade == format_m3:
         mes_calculo = mes3
+    elif mes_rentabilidade == format_m4:
+        mes_calculo = mes4
+    elif mes_rentabilidade == format_m5:
+        mes_calculo = mes5
+    elif mes_rentabilidade == format_m6:
+        mes_calculo = mes6
+    elif mes_rentabilidade == format_m7:
+        mes_calculo = mes7
+    elif mes_rentabilidade == format_m8:
+        mes_calculo = mes8
+    elif mes_rentabilidade == format_m9:
+        mes_calculo = mes9
+    else:
+        mes_calculo = mes10
 
     m1_calculo = mes_calculo.month
     m2_data = mes_calculo - relativedelta(months=1)
