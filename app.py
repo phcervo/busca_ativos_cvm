@@ -300,6 +300,9 @@ def rentabilidade_func():
     if len(df_d2) <=1:
         data_maxima = data_maxima - relativedelta(days=1)
         df_d2 = df_fundos.loc[df_fundos['data'] == data_maxima]
+    if len(df_d2) <=1:
+        data_maxima = data_maxima - relativedelta(days=2)
+        df_d2 = df_fundos.loc[df_fundos['data'] == data_maxima]
 
     pl_dos_fundos = df_d2[['cnpj','pl']]
     pl_dos_fundos.columns = ['CNPJ_FUNDO_CLASSE','PL']
@@ -322,7 +325,6 @@ def rentabilidade_func():
     df_final['pl'] = df_final['pl'].astype(float)
     df_final['cota'] = df_final['cota'].astype(float)
     df_final = df_final.sort_values('data', ascending=True)
-    df_final = df_final.loc[df_final['data'] == data_maxima]
     df_final = df_final.loc[df_final['cotistas'] > 10]
  
     df_ordenada = df_final.sort_values("pl",ascending=False)
@@ -548,8 +550,19 @@ def rentabilidade_inc():
 
     df_final['pl'] = df_final['pl'].astype(float)
     df_final['cota'] = df_final['cota'].astype(float)
-    df_final = df_final.sort_values('data', ascending=True)
-    df_final = df_final.loc[df_final['data'] == data_maxima]
+    df_final2 = df_final.sort_values('data', ascending=True)
+    df_final = df_final2.loc[df_final2['data'] == data_maxima]
+    if len(df_final) <= 1:
+        data_maxima = data_maxima + relativedelta(days=1)
+        df_final = df_final2.loc[df_final2['data'] == data_maxima]
+    
+    if len(df_final) <= 1:
+        data_maxima = data_maxima + relativedelta(days=2)
+        df_final = df_final2.loc[df_final2['data'] == data_maxima]
+    
+    if len(df_final) <= 1:
+        data_maxima = data_maxima + relativedelta(days=3)
+        df_final = df_final2.loc[df_final2['data'] == data_maxima]
     df_final = df_final.loc[df_final['cotistas'] > 10]
  
     df_ordenada = df_final.sort_values("pl",ascending=False)
@@ -778,9 +791,20 @@ def rentabilidade_inc_sem_filtro():
 
     df_final['pl'] = df_final['pl'].astype(float)
     df_final['cota'] = df_final['cota'].astype(float)
-    df_final = df_final.sort_values('data', ascending=True)
-    df_final = df_final.loc[df_final['data'] == data_maxima]
-    df_final = df_final.loc[df_final['cotistas'] >= 10]
+    df_final2 = df_final.sort_values('data', ascending=True)
+    df_final = df_final2.loc[df_final2['data'] == data_maxima]
+    if len(df_final) <= 1:
+        data_maxima = data_maxima + relativedelta(days=1)
+        df_final = df_final2.loc[df_final2['data'] == data_maxima]
+    
+    if len(df_final) <= 1:
+        data_maxima = data_maxima + relativedelta(days=2)
+        df_final = df_final2.loc[df_final2['data'] == data_maxima]
+    
+    if len(df_final) <= 1:
+        data_maxima = data_maxima + relativedelta(days=3)
+        df_final = df_final2.loc[df_final2['data'] == data_maxima]   
+    df_final = df_final2.loc[df_final2['cotistas'] >= 10]
  
     df_ordenada = df_final.sort_values("pl",ascending=False)
     lista_fundos_inc = df_ordenada['cnpj'].unique().tolist()
@@ -821,6 +845,9 @@ def rentabilidade_inc_sem_filtro():
     m1_calculo = mes_calculo.month
     m2_calculo = m2_data.month
     data_final = df_filtrada.loc[df_filtrada['mes'] == m1_calculo]['data'].max()
+    print(f"data final é:{data_final}")
+    print(lista_fundos_inc)
+    print(df_final)
     data_inicial = df_filtrada.loc[df_filtrada['mes'] == m2_calculo]['data'].max()
     dict_rentabilidade = {}
     lista_cnpj = []
